@@ -12,12 +12,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _whiteSeconds = 20;
-  int _blackSeconds = 20;
-  bool _isStarted = false;
+  TextEditingController _whiteTimeController = TextEditingController();
+  TextEditingController _blackTimeController = TextEditingController();
+  TextEditingController _selectedTimeController = TextEditingController();
+  TimeOfDay? _selectedWhiteTime;
+  TimeOfDay? _selectedBlackTime;
+  int _whiteSeconds = 0;
+
+  int _blackSeconds = 0;
+
+  bool _isStarted = true;
   bool _isWhiteTurn = false;
   bool _isBlackTurn = false;
   Timer? _timer;
+  String selectedValue = 'Default';
+  int _whiteCount = 0;
+  int _blackCount = 0;
 
   void _startTimer() {
     _timer?.cancel();
@@ -25,13 +35,19 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         if (_isWhiteTurn && _whiteSeconds > 0) {
           _whiteSeconds--;
-        } else if (_isBlackTurn && _blackSeconds > 0) {
+        }else if(_whiteSeconds==0){
+          _timer!.cancel();
+        }
+        else if (_isBlackTurn && _blackSeconds > 0) {
           _blackSeconds--;
-        } else {
+        } else if(_blackSeconds==0){
+          _timer!.cancel();
+        }else {
           // Timer expired, switch turns
           _timer?.cancel();
           _switchTurns();
         }
+
       });
     });
   }
@@ -47,23 +63,125 @@ class _HomePageState extends State<HomePage> {
 
   void _resetTimer() {
     setState(() {
-      _whiteSeconds = 20;
-      _blackSeconds = 20;
-      _isWhiteTurn=false;
+      _whiteSeconds = _parseTime(_whiteTimeController.text);
+      _blackSeconds = _parseTime(_blackTimeController.text);
+      _isWhiteTurn = false;
       _isBlackTurn = false;
+      _isStarted = true;
+      _blackCount = 0;
+      _whiteCount = 0;
       _timer?.cancel();
     });
   }
 
-  void _showTimeInputDialog(BuildContext context, bool isWhite) {
-    TextEditingController _controller = TextEditingController();
-    showDialog(
+  Future<void> _selectWhiteTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedWhiteTime ?? TimeOfDay.now(),
+    );
+
+    if (picked != null && picked != _selectedWhiteTime) {
+      setState(() {
+        _selectedWhiteTime = picked;
+        _whiteTimeController.text = _selectedWhiteTime!.format(context);
+        // You can use _selectedTime to perform further actions with the chosen time
+      });
+    }
+  }
+
+  Future<void> _selectBlackTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedBlackTime ?? TimeOfDay.now(),
+    );
+
+    if (picked != null && picked != _selectedBlackTime) {
+      setState(() {
+        _selectedBlackTime = picked;
+        _blackTimeController.text = _selectedBlackTime!.format(context);
+        // You can use _selectedTime to perform further actions with the chosen time
+      });
+    }
+  }
+
+  Future<void> _showDialog() async {
+    return showDialog<void>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(
-            "Set Timer",
-            style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+          title: Text('Set Timer'),
+          content: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: TextField(
+                          controller: _whiteTimeController,
+                          keyboardType: TextInputType.datetime,
+                          decoration: InputDecoration(
+                              labelText: "White",
+                              hintText: "mm:ss",
+                              border: OutlineInputBorder(),
+                              suffixIcon: GestureDetector(
+                                onTap: () {
+                                  _selectWhiteTime(context);
+                                },
+                                child: Icon(Icons.timer),
+                              )),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        flex: 1,
+                        child: TextField(
+                          controller: _blackTimeController,
+                          keyboardType: TextInputType.datetime,
+                          decoration: InputDecoration(
+                              labelText: "Black",
+                              hintText: "mm:ss",
+                              border: OutlineInputBorder(),
+                              suffixIcon: GestureDetector(
+                                onTap: () {
+                                  _selectBlackTime(context);
+                                },
+                                child: Icon(Icons.timer),
+                              )),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  _DialogContents(
+                    key: UniqueKey(),
+                    selectedValue: selectedValue,
+                    onChanged: (String newValue) {
+                      setState(() {
+                        selectedValue = newValue;
+                      });
+                    },
+                  ),
+                  SizedBox(height: 10),
+                  Visibility(
+                    visible: selectedValue == 'Increment' ||
+                        selectedValue == 'Decrement',
+                    child: Expanded(
+                      flex: 1,
+                      child: TextField(
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: "Time",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           actions: <Widget>[
             TextButton(
@@ -74,15 +192,12 @@ class _HomePageState extends State<HomePage> {
             ),
             TextButton(
               onPressed: () {
-                int timeInSeconds = int.tryParse(_controller.text) ?? 0;
                 setState(() {
-                  if (isWhite) {
-                    _whiteSeconds = timeInSeconds;
-                  } else {
-                    _blackSeconds = timeInSeconds;
-                  }
+                  _whiteSeconds = _parseTime(_whiteTimeController.text);
+                  _blackSeconds = _parseTime(_blackTimeController.text);
+                  // Use _parseTime for the additional time field if needed
+                  Navigator.pop(context);
                 });
-                Navigator.of(context).pop();
               },
               child: Text('Set'),
             ),
@@ -92,18 +207,41 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  int _parseTime(String timeString) {
+    List<String> parts = timeString.split(':');
+    if (parts.length != 2) {
+      // Invalid format, return 0 or handle it accordingly
+      return 0;
+    }
+    try {
+      int minutes = int.parse(parts[0]);
+      int seconds = int.parse(parts[1]);
+
+      // Check if the values are within a valid range
+      if (minutes < 0 || seconds < 0 || seconds >= 60) {
+        return 0; // Invalid values, return 0 or handle it accordingly
+      }
+
+      return minutes * 60 + seconds;
+    } catch (e) {
+      return 0; // Parsing error, return 0 or handle it accordingly
+    }
+  }
+
   Future<void> play() async {
     log("im here");
     await AssetsAudioPlayer.newPlayer().open(
       Audio('assets/sound/gun.mp3'),
     );
   }
+
   Future<void> reload() async {
     log("im here");
     await AssetsAudioPlayer.newPlayer().open(
       Audio('assets/sound/reload.mp3'),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,23 +257,37 @@ class _HomePageState extends State<HomePage> {
             children: [
               GestureDetector(
                 onTap: () {
-                  _isWhiteTurn== true ?
-                  setState(() {
-                    play();
-                    _isWhiteTurn = false;
-                    _isBlackTurn = true;
-                    _startTimer();
-                  }) : '';
+                  _isWhiteTurn == true && _whiteSeconds != 0
+                      ? setState(() {
+                          play();
+                          _isWhiteTurn = false;
+                          _isBlackTurn = true;
+                          _startTimer();
+                          _whiteCount ++;
+                        })
+                      : '';
                 },
                 child: Container(
                   width: MediaQuery.of(context).size.width,
                   height: MediaQuery.of(context).size.height * 0.39,
-                  color: _isWhiteTurn==true ? _whiteSeconds<10?Colors.red:Colors.green : Colors.white,
+                  color: _isWhiteTurn == true
+                      ? _whiteSeconds < 10
+                          ? Colors.red
+                          : Colors.green
+                      : Colors.white,
                   child: Center(
-                    child: Text(
-                      "${_whiteSeconds}",
-                      style:
-                      TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "${(_whiteSeconds ~/ 60).toString().padLeft(2, '0')}:${(_whiteSeconds % 60).toString().padLeft(2, '0')}",
+                          style:
+                              TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+                        ),
+                        Text("Moves: " "${_whiteCount}",style: TextStyle(
+                            fontWeight: FontWeight.bold,fontSize: 15
+                        ),),
+                      ],
                     ),
                   ),
                 ),
@@ -144,26 +296,45 @@ class _HomePageState extends State<HomePage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _isStarted = true;
-                        _isWhiteTurn = true;
-                        _isBlackTurn = false;
-                        _startTimer();
-                      });
-                    },
-                    child: Text(
-                      "Start",
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20),
-                    ),
-                    style: ElevatedButton.styleFrom(primary: Colors.green),
+                  Column(
+                    children: [
+                      _isStarted == true
+                          ? ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _isStarted = false;
+                                  _isWhiteTurn = true;
+                                  _isBlackTurn = false;
+                                  _startTimer();
+                                });
+                              },
+                              child: Text(
+                                "Start",
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 20),
+                              ),
+                              style:
+                                  ElevatedButton.styleFrom(primary: Colors.green),
+                            )
+                          : ElevatedButton(
+                              onPressed: () {
+                              },
+                              child: Text(
+                                "Start",
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 20),
+                              ),
+                              style:
+                                  ElevatedButton.styleFrom(primary: Colors.grey),
+                            ),
+                    ],
                   ),
                   ElevatedButton(
-                    onPressed:(){
+                    onPressed: () {
                       setState(() {
                         reload();
                         _resetTimer();
@@ -178,9 +349,10 @@ class _HomePageState extends State<HomePage> {
                     ),
                     style: ElevatedButton.styleFrom(primary: Colors.red),
                   ),
+                  _isStarted == true ?
                   ElevatedButton(
                     onPressed: () {
-                      _showTimeInputDialog(context, true);
+                    _showDialog();
                     },
                     child: Text(
                       "Time",
@@ -190,34 +362,104 @@ class _HomePageState extends State<HomePage> {
                           fontSize: 20),
                     ),
                     style: ElevatedButton.styleFrom(primary: Colors.blue),
+                  ) :
+                  ElevatedButton(
+                    onPressed: () {
+                    },
+                    child: Text(
+                      "Time",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20),
+                    ),
+                    style: ElevatedButton.styleFrom(primary: Colors.grey),
                   )
                 ],
               ),
               SizedBox(height: 20),
               GestureDetector(
-                onTap: () { _isBlackTurn==true ?
-                  setState(() {
-                    play();
-                    _isBlackTurn = false;
-                    _isWhiteTurn = true;
-                    _startTimer();
-                  }) : '';
+                onTap: () {
+                  _isBlackTurn == true && _blackSeconds != 0
+                      ? setState(() {
+                          play();
+                          _isBlackTurn = false;
+                          _isWhiteTurn = true;
+                          _startTimer();
+                          _blackCount ++;
+                        })
+                      : '';
                 },
                 child: Container(
                   width: MediaQuery.of(context).size.width,
                   height: MediaQuery.of(context).size.height * 0.39,
-                  color: _isBlackTurn==true ? _blackSeconds<10?Colors.red:Colors.green :Colors.black38,
+                  color: _isBlackTurn == true
+                      ? _blackSeconds < 10
+                          ? Colors.red
+                          : Colors.green
+                      : Colors.black,
                   child: Center(
-                    child: Text(
-                      "${_blackSeconds}",
-                      style:
-                      TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "${(_blackSeconds ~/ 60).toString().padLeft(2, '0')}:${(_blackSeconds % 60).toString().padLeft(2, '0')}",
+                          style:
+                              TextStyle(fontSize: 50, fontWeight: FontWeight.bold,color: Colors.white),
+                        ),
+                        Text("Moves: " + "${_blackCount}", style: TextStyle(
+                          fontWeight: FontWeight.bold,fontSize: 15,color: Colors.white
+                        ),),
+                      ],
                     ),
                   ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DialogContents extends StatefulWidget {
+  final String selectedValue;
+  final Function(String) onChanged;
+
+  _DialogContents({
+    Key? key,
+    required this.selectedValue,
+    required this.onChanged,
+  }) : super(key: key);
+
+  @override
+  __DialogContentsState createState() => __DialogContentsState();
+}
+
+class __DialogContentsState extends State<_DialogContents> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey),
+        borderRadius: BorderRadius.circular(4.0),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: DropdownButton<String>(
+          underline: Container(),
+          value: widget.selectedValue,
+          onChanged: (String? newValue) {
+            widget.onChanged(newValue!);
+          },
+          items: <String>['Default', 'Increment', 'Decrement']
+              .map<DropdownMenuItem<String>>((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
         ),
       ),
     );
