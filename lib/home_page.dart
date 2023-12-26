@@ -333,20 +333,24 @@ class _HomePageState extends State<HomePage> {
                           : Color(0xFF00CC00)
                       : Colors.white,
                   child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "${(_whiteSeconds ~/ 60).toString().padLeft(2, '0')}:${(_whiteSeconds % 60).toString().padLeft(2, '0')}",
-                          style: TextStyle(
-                              fontSize: 50, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          "Moves: " "${_whiteCount}",
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      ],
+                    child: Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.rotationZ(3.14159),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "${(_whiteSeconds ~/ 60).toString().padLeft(2, '0')}:${(_whiteSeconds % 60).toString().padLeft(2, '0')}",
+                            style: TextStyle(
+                                fontSize: 50, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            "Moves: " "${_whiteCount}",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
