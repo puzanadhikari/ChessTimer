@@ -50,7 +50,6 @@ class _HomePageState extends State<HomePage> {
       });
     });
   }
-
   void _switchTurns() {
     log("Switch Turn");
     setState(() {
@@ -86,7 +85,6 @@ class _HomePageState extends State<HomePage> {
         );
       },
     );
-
     if (picked != null && picked != _selectedWhiteTime) {
       setState(() {
         _selectedWhiteTime = picked;
